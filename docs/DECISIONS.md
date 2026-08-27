@@ -1,0 +1,23 @@
+# Product Decisions
+
+- TeslaMarketplace is owner-operated; customers are buyers.
+- There is no third-party seller or peer-to-peer marketplace.
+- Trade-in: excluded.
+- Financing integration: excluded.
+- Insurance: excluded.
+- Service scheduling: excluded.
+- SMS: excluded.
+- Live delivery map: excluded.
+- Email notifications: included.
+- Website notifications: included.
+- Mobile-app push notifications: included.
+- Owner/admin notifications: included.
+- Test drives: included.
+- Payments: included.
+- Delivery: included.
+- Public-information update monitoring: included, with owner approval before catalog application.
+- PostgreSQL database: included.
+- Security: included.
+- Mobile app: included.
+- International/multi-currency: included.
+- Charging/energy products: included.
