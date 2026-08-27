@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,16 +17,23 @@ const vehicles = [
 ];
 
 const requests = [];
+const orders = [];
+
+function createTrackingId() {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const token = crypto.randomBytes(4).toString('hex').toUpperCase();
+  return `TMX-${date}-${token}`;
+}
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'TeslaMarketplace', timestamp: new Date().toISOString() });
 });
 
 app.get('/api', (_req, res) => {
-  res.json({ name: 'TeslaMarketplace API', version: '1.0.0' });
+  res.json({ name: 'TeslaMarketplace API', version: '1.1.0' });
 });
 
-app.get('/api/vehicles', (_req, res) => res.json({ data: vehicles }));
+app.get('/api/vehicles', (_req, res) => res.json({ data: vehicles.filter((vehicle) => vehicle.status !== 'draft') }));
 
 app.get('/api/vehicles/:id', (req, res) => {
   const vehicle = vehicles.find((item) => item.id === req.params.id);
@@ -39,6 +47,35 @@ app.post('/api/requests', (req, res) => {
   const request = { id: `TM-${Date.now().toString(36).toUpperCase()}`, type, name, email, message, status: 'received', createdAt: new Date().toISOString() };
   requests.push(request);
   res.status(201).json({ data: request });
+});
+
+app.post('/api/purchase-requests', (req, res) => {
+  const { vehicleId, name, email, phone = '', notes = '' } = req.body || {};
+  const vehicle = vehicles.find((item) => item.id === vehicleId);
+  if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
+  if (vehicle.status !== 'available') return res.status(409).json({ error: 'Vehicle is not currently available' });
+  if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+
+  const order = {
+    id: `TM-${Date.now().toString(36).toUpperCase()}`,
+    trackingId: createTrackingId(),
+    vehicleId,
+    customer: { name, email, phone },
+    total: vehicle.price,
+    status: 'received',
+    tracking: [{ status: 'Order Received', note: 'Purchase request received by TeslaMarketplace.', createdAt: new Date().toISOString() }],
+    notes,
+    createdAt: new Date().toISOString()
+  };
+  orders.push(order);
+  vehicle.status = 'reserved';
+  res.status(201).json({ data: order });
+});
+
+app.get('/api/orders/track/:trackingId', (req, res) => {
+  const order = orders.find((item) => item.trackingId === req.params.trackingId);
+  if (!order) return res.status(404).json({ error: 'Tracking ID not found' });
+  res.json({ data: { trackingId: order.trackingId, status: order.status, vehicleId: order.vehicleId, total: order.total, tracking: order.tracking } });
 });
 
 app.get('/api/requests/:id', (req, res) => {
