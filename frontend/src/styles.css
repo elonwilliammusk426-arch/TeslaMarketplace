@@ -1,0 +1,11 @@
+:root { font-family: Inter, system-ui, sans-serif; color: #171717; background: #fff; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.page { min-height: 100vh; }
+.header { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 6%; border-bottom: 1px solid #e8e8e8; }
+.header span { color: #666; font-size: 14px; }
+.hero { max-width: 980px; margin: 0 auto; padding: 120px 6%; }
+.eyebrow { font-size: 12px; letter-spacing: .16em; color: #666; }
+h1 { font-size: clamp(44px, 8vw, 82px); line-height: .98; letter-spacing: -.05em; margin: 16px 0; }
+.hero p:not(.eyebrow) { max-width: 620px; font-size: 20px; line-height: 1.5; color: #555; }
+button { margin-top: 24px; border: 0; border-radius: 999px; padding: 14px 24px; background: #111; color: #fff; font-weight: 600; cursor: pointer; }
