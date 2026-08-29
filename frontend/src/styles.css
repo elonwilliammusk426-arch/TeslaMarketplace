@@ -2,10 +2,22 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 .page { min-height: 100vh; }
-.header { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 6%; border-bottom: 1px solid #e8e8e8; }
+.header { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 6%; border-bottom: 1px solid #e8e8e8; position: sticky; top: 0; background: rgba(255,255,255,.9); backdrop-filter: blur(14px); z-index: 2; }
 .header span { color: #666; font-size: 14px; }
-.hero { max-width: 980px; margin: 0 auto; padding: 120px 6%; }
+.hero { max-width: 1100px; margin: 0 auto; padding: 120px 6% 80px; }
 .eyebrow { font-size: 12px; letter-spacing: .16em; color: #666; }
 h1 { font-size: clamp(44px, 8vw, 82px); line-height: .98; letter-spacing: -.05em; margin: 16px 0; }
-.hero p:not(.eyebrow) { max-width: 620px; font-size: 20px; line-height: 1.5; color: #555; }
+.hero p:not(.eyebrow) { max-width: 700px; font-size: 20px; line-height: 1.5; color: #555; }
 button { margin-top: 24px; border: 0; border-radius: 999px; padding: 14px 24px; background: #111; color: #fff; font-weight: 600; cursor: pointer; }
+.status { font-size: 14px !important; margin-top: 16px; }
+.inventory { padding: 80px 6%; background: #f6f6f6; }
+.section-heading { max-width: 1100px; margin: 0 auto 32px; }
+h2 { font-size: clamp(36px, 5vw, 58px); letter-spacing: -.05em; margin: 8px 0 0; }
+.vehicle-grid { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+.vehicle-card { min-height: 250px; padding: 26px; border-radius: 24px; background: #fff; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 8px 30px rgba(0,0,0,.05); }
+.vehicle-card span, .vehicle-card small { color: #666; font-size: 12px; }
+.vehicle-card h3 { font-size: 28px; margin: 8px 0; }
+.vehicle-card p { color: #666; line-height: 1.5; }
+.vehicle-card > strong { font-size: 24px; }
+.muted { max-width: 1100px; margin: auto; color: #666; }
+@media (max-width: 700px) { .header { padding: 0 20px; } .header span { display: none; } .hero { padding: 90px 20px 60px; } .inventory { padding: 60px 20px; } }
