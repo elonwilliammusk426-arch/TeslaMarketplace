@@ -1,4 +1,5 @@
 const { query } = require('./db');
+const { hashPassword } = require('./auth');
 
 async function initializeDatabase() {
   await query(`
@@ -78,8 +79,6 @@ async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_requests_email ON requests(email);
   `);
 
-  // Seed a varied 2026 catalog. Metadata intentionally carries presentation
-  // details so the frontend can show different body styles, colors and trims.
   await query(`
     INSERT INTO vehicles (id, model, year, price, range_miles, status, image_url, metadata)
     VALUES
@@ -93,16 +92,24 @@ async function initializeDatabase() {
       ('tm-008', 'Cybertruck', 2026, 99990, 325, 'available', 'https://images.unsplash.com/photo-1551830820-330a71b99659?auto=format&fit=crop&w=1600&q=90', '{"body":"Electric Pickup","trim":"Premium AWD","color":"Stainless Steel","drive":"AWD","description":"A stainless-steel electric pickup built around utility, towing and a distinctive angular design."}'),
       ('tm-009', 'Cybertruck', 2026, 119990, 325, 'available', 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1600&q=90', '{"body":"Electric Pickup","trim":"Cyberbeast","color":"Satin Black","drive":"AWD","description":"A high-performance Cybertruck configuration with an aggressive dark presentation."}'),
       ('tm-010', 'Cybertruck', 2026, 89990, 320, 'available', 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1600&q=90', '{"body":"Electric Pickup","trim":"Dual Motor AWD","color":"Silver","drive":"AWD","description":"A practical dual-motor electric pickup configuration with a silver presentation."}')
-    ON CONFLICT (id) DO UPDATE SET
-      model = EXCLUDED.model,
-      year = EXCLUDED.year,
-      price = EXCLUDED.price,
-      range_miles = EXCLUDED.range_miles,
-      status = EXCLUDED.status,
-      image_url = EXCLUDED.image_url,
-      metadata = EXCLUDED.metadata,
-      updated_at = NOW();
+    ON CONFLICT (id) DO UPDATE SET model=EXCLUDED.model,year=EXCLUDED.year,price=EXCLUDED.price,range_miles=EXCLUDED.range_miles,status=EXCLUDED.status,image_url=EXCLUDED.image_url,metadata=EXCLUDED.metadata,updated_at=NOW();
   `);
+
+  // Optional one-time owner provisioning. Credentials never live in source control.
+  const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const adminPassword = String(process.env.ADMIN_PASSWORD || '');
+  const adminName = String(process.env.ADMIN_NAME || 'TeslaMarketplace Owner').trim();
+  if (adminEmail || adminPassword) {
+    if (!adminEmail || !adminPassword) throw new Error('ADMIN_EMAIL and ADMIN_PASSWORD must be supplied together');
+    if (adminPassword.length < 12) throw new Error('ADMIN_PASSWORD must be at least 12 characters');
+    const existing = await query(`SELECT id, role FROM users WHERE email=$1`, [adminEmail]);
+    if (existing.rows.length === 0) {
+      const passwordHash = await hashPassword(adminPassword);
+      await query(`INSERT INTO users (id,name,email,role,password_hash) VALUES ($1,$2,$3,'admin',$4)`, [`owner-${Date.now().toString(36)}`, adminName, adminEmail, passwordHash]);
+    } else if (existing.rows[0].role !== 'admin') {
+      await query(`UPDATE users SET role='admin', updated_at=NOW() WHERE id=$1`, [existing.rows[0].id]);
+    }
+  }
 }
 
 module.exports = { initializeDatabase };
