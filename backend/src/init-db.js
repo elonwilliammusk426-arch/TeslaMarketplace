@@ -78,14 +78,30 @@ async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_requests_email ON requests(email);
   `);
 
+  // Seed a varied 2026 catalog. Metadata intentionally carries presentation
+  // details so the frontend can show different body styles, colors and trims.
   await query(`
-    INSERT INTO vehicles (id, model, year, price, range_miles, status)
+    INSERT INTO vehicles (id, model, year, price, range_miles, status, image_url, metadata)
     VALUES
-      ('tm-001', 'Model 3', 2026, 38990, 272, 'available'),
-      ('tm-002', 'Model Y', 2026, 44990, 320, 'available'),
-      ('tm-003', 'Model S', 2026, 79990, 410, 'available'),
-      ('tm-004', 'Model X', 2026, 84990, 335, 'reserved')
-    ON CONFLICT (id) DO NOTHING;
+      ('tm-001', 'Model 3', 2026, 38990, 363, 'available', 'https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&w=1600&q=90', '{"body":"Sport Sedan","trim":"Long Range AWD","color":"Pearl White","drive":"AWD","description":"A streamlined electric sedan configured for long-distance efficiency and everyday driving."}'),
+      ('tm-002', 'Model 3', 2026, 45990, 346, 'available', 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?auto=format&fit=crop&w=1600&q=90', '{"body":"Sport Sedan","trim":"Performance","color":"Ultra Red","drive":"AWD","description":"A performance-focused sedan with a sportier setup and distinctive red finish."}'),
+      ('tm-003', 'Model Y', 2026, 44990, 321, 'available', 'https://images.unsplash.com/photo-1593941707882-a5bba14938c7?auto=format&fit=crop&w=1600&q=90', '{"body":"Midsize SUV","trim":"Long Range AWD","color":"Stealth Grey","drive":"AWD","description":"A versatile electric SUV designed around cargo space, comfort and road-trip range."}'),
+      ('tm-004', 'Model Y', 2026, 52990, 327, 'available', 'https://images.unsplash.com/photo-1597007066704-67bf2068d5b2?auto=format&fit=crop&w=1600&q=90', '{"body":"Midsize SUV","trim":"Performance","color":"Deep Blue","drive":"AWD","description":"A sharper Model Y configuration combining utility with quicker acceleration and a blue exterior."}'),
+      ('tm-005', 'Model Y L', 2026, 61990, 327, 'available', 'https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=1600&q=90', '{"body":"Extended Midsize SUV","trim":"Premium","color":"Solid Black","drive":"AWD","description":"An extended Model Y configuration focused on passenger room, comfort and cargo flexibility."}'),
+      ('tm-006', 'Model S', 2026, 79990, 410, 'available', 'https://images.unsplash.com/photo-1619767886558-efdc259cde1a?auto=format&fit=crop&w=1600&q=90', '{"body":"Full-size Sedan","trim":"Dual Motor","color":"Midnight Silver","drive":"AWD","description":"A premium electric sedan with long-range touring capability and a refined cabin."}'),
+      ('tm-007', 'Model X', 2026, 84990, 335, 'reserved', 'https://images.unsplash.com/photo-1551830820-330a71b99659?auto=format&fit=crop&w=1600&q=90', '{"body":"SUV","trim":"Dual Motor","color":"Quicksilver","drive":"AWD","description":"A spacious premium SUV with distinctive rear doors and three-row flexibility."}'),
+      ('tm-008', 'Cybertruck', 2026, 99990, 325, 'available', 'https://images.unsplash.com/photo-1551830820-330a71b99659?auto=format&fit=crop&w=1600&q=90', '{"body":"Electric Pickup","trim":"Premium AWD","color":"Stainless Steel","drive":"AWD","description":"A stainless-steel electric pickup built around utility, towing and a distinctive angular design."}'),
+      ('tm-009', 'Cybertruck', 2026, 119990, 325, 'available', 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1600&q=90', '{"body":"Electric Pickup","trim":"Cyberbeast","color":"Satin Black","drive":"AWD","description":"A high-performance Cybertruck configuration with an aggressive dark presentation."}'),
+      ('tm-010', 'Cybertruck', 2026, 89990, 320, 'available', 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1600&q=90', '{"body":"Electric Pickup","trim":"Dual Motor AWD","color":"Silver","drive":"AWD","description":"A practical dual-motor electric pickup configuration with a silver presentation."}')
+    ON CONFLICT (id) DO UPDATE SET
+      model = EXCLUDED.model,
+      year = EXCLUDED.year,
+      price = EXCLUDED.price,
+      range_miles = EXCLUDED.range_miles,
+      status = EXCLUDED.status,
+      image_url = EXCLUDED.image_url,
+      metadata = EXCLUDED.metadata,
+      updated_at = NOW();
   `);
 }
 
