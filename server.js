@@ -1,11 +1,21 @@
 const express = require('express');
+const fs = require('node:fs');
 const path = require('node:path');
-const { initializeDatabase, } = require('./backend/src/init-db');
+const { initializeDatabase } = require('./backend/src/init-db');
 const { closeDatabase, isDatabaseConfigured } = require('./backend/src/db');
 const app = require('./backend/server');
 
 const PORT = Number(process.env.PORT) || 3000;
 const frontendDist = path.join(__dirname, 'frontend', 'dist');
+
+// The CI health tests import this module before the frontend build exists.
+// Give the exported Express app a deterministic JSON 404 in that situation;
+// production startup installs the React SPA fallback after the static assets.
+if (!fs.existsSync(frontendDist)) {
+  app.use((req, res) => {
+    res.status(404).json({ error: 'Route not found' });
+  });
+}
 
 async function start() {
   if (isDatabaseConfigured()) {
