@@ -15,15 +15,17 @@ const ASSETS = {
 };
 
 async function refreshVehicleAssets() {
+  // Gallery order intentionally accounts for the current card renderer's index-based selection,
+  // so performance/Cyberbeast listings receive their distinctive first-card image as well.
   const updates = [
     ['tm-001', ASSETS.model3, [ASSETS.model3, ASSETS.model3Performance], 'Long Range AWD'],
-    ['tm-002', ASSETS.model3Performance, [ASSETS.model3Performance, ASSETS.model3], 'Performance'],
+    ['tm-002', ASSETS.model3Performance, [ASSETS.model3, ASSETS.model3Performance], 'Performance'],
     ['tm-003', ASSETS.modely, [ASSETS.modely, ASSETS.modelyPerformance], 'Long Range AWD'],
-    ['tm-004', ASSETS.modelyPerformance, [ASSETS.modelyPerformance, ASSETS.modely], 'Performance'],
+    ['tm-004', ASSETS.modelyPerformance, [ASSETS.modely, ASSETS.modelyPerformance], 'Performance'],
     ['tm-005', ASSETS.models, [ASSETS.models, ASSETS.modelsPerformance], 'Dual Motor'],
     ['tm-006', ASSETS.modelx, [ASSETS.modelx], 'Dual Motor'],
     ['tm-007', ASSETS.cybertruck, [ASSETS.cybertruck, ASSETS.cybertruckAdventure], 'AWD'],
-    ['tm-008', ASSETS.cybertruck, [ASSETS.cybertruckAdventure, ASSETS.cybertruck], 'Cyberbeast'],
+    ['tm-008', ASSETS.cybertruckAdventure, [ASSETS.cybertruck, ASSETS.cybertruckAdventure], 'Cyberbeast'],
     ['tm-010', ASSETS.models, [ASSETS.models], 'Previous Generation / Used'],
     ['tm-011', ASSETS.modelx, [ASSETS.modelx], 'Previous Generation / Used']
   ];
