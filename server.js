@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('node:fs');
 const path = require('node:path');
 const { initializeDatabase } = require('./backend/src/init-db');
+const { refreshVehicleAssets } = require('./backend/src/refresh-vehicle-assets');
 const { closeDatabase, isDatabaseConfigured } = require('./backend/src/db');
 const app = require('./backend/server');
 
@@ -21,7 +22,8 @@ async function start() {
   if (isDatabaseConfigured()) {
     try {
       await initializeDatabase();
-      console.log('Database initialized.');
+      await refreshVehicleAssets();
+      console.log('Database initialized and vehicle catalog assets refreshed.');
     } catch (error) {
       console.error('Database initialization failed; API may be unavailable:', error.message);
     }
