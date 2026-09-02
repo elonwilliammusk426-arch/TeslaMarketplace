@@ -1,10 +1,11 @@
 {
   "name": "tesla-marketplace",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
-  "description": "Owner-operated Tesla vehicle sales platform",
+  "description": "TeslaMarketplace full-stack marketplace",
   "main": "server.js",
   "scripts": {
+    "build": "npm --prefix frontend install && npm --prefix frontend run build",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "db:init": "node scripts/init-db.js",
@@ -12,7 +13,7 @@
     "test": "node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "dependencies": {
     "express": "^5.1.0",
