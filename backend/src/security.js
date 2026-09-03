@@ -3,9 +3,46 @@ const helmet = require('helmet');
 const { verifyToken } = require('./auth');
 const { query } = require('./db');
 
+const buckets = new Map();
+const WINDOW_MS = 60 * 1000;
+const GENERAL_LIMIT = 120;
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+const AUTH_LIMIT = 12;
+const PURCHASE_LIMIT = 8;
+
 function bearerToken(req) {
   const value = req.headers.authorization || '';
   return value.replace(/^Bearer\s+/i, '').trim();
+}
+
+function clientKey(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+function rateLimit(req, res, next) {
+  const path = req.path;
+  const isAuth = path === '/api/auth/login' || path === '/api/auth/register';
+  const isPurchase = path === '/api/purchase-requests' || path === '/api/orders' || path === '/api/payments/create-checkout-session';
+  const windowMs = isAuth ? AUTH_WINDOW_MS : WINDOW_MS;
+  const limit = isAuth ? AUTH_LIMIT : (isPurchase ? PURCHASE_LIMIT : GENERAL_LIMIT);
+  const key = `${clientKey(req)}:${isAuth ? 'auth' : isPurchase ? 'purchase' : 'general'}`;
+  const now = Date.now();
+  let bucket = buckets.get(key);
+  if (!bucket || now - bucket.startedAt >= windowMs) bucket = { startedAt: now, count: 0 };
+  bucket.count += 1;
+  buckets.set(key, bucket);
+  if (buckets.size > 5000) {
+    for (const [entryKey, entry] of buckets) {
+      if (now - entry.startedAt >= windowMs) buckets.delete(entryKey);
+    }
+  }
+  if (bucket.count > limit) {
+    const retryAfter = Math.max(1, Math.ceil((bucket.startedAt + windowMs - now) / 1000));
+    res.setHeader('Retry-After', String(retryAfter));
+    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+  return next();
 }
 
 function authenticate(req, res) {
@@ -72,7 +109,9 @@ function workflowGuard(req, res, next) {
 
 function securityMiddleware(app) {
   app.disable('x-powered-by');
+  app.set('trust proxy', 1);
   app.use(helmet());
+  app.use(rateLimit);
   app.use(workflowGuard);
 }
 
