@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="TeslaMarketplace — owner-operated Tesla vehicle sales platform" />
     <title>TeslaMarketplace</title>
+    <script>
+      (() => {
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = (input, init = {}) => {
+          const token = window.localStorage.getItem('tm_token');
+          if (!token) return nativeFetch(input, init);
+          const headers = new Headers(init.headers || {});
+          if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+          return nativeFetch(input, { ...init, headers });
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
