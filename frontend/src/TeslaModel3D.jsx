@@ -5,7 +5,8 @@ const MODEL_DIMENSIONS = {
   'Model 3': { length: 4.35, width: 1.86, height: 1.42, wheelbase: 2.88, roof: 1.18 },
   'Model Y': { length: 4.75, width: 1.92, height: 1.62, wheelbase: 2.89, roof: 1.34 },
   'Model S': { length: 4.97, width: 1.96, height: 1.44, wheelbase: 2.96, roof: 1.20 },
-  'Model X': { length: 5.04, width: 2.00, height: 1.68, wheelbase: 2.96, roof: 1.38 }
+  'Model X': { length: 5.04, width: 2.00, height: 1.68, wheelbase: 2.96, roof: 1.38 },
+  Cybertruck: { length: 5.68, width: 2.41, height: 1.79, wheelbase: 3.63, roof: 1.52 }
 };
 
 const WHEEL_POSITIONS = (d) => [
@@ -32,35 +33,41 @@ function Wheel({ position, sport }) {
 
 function TeslaModel3D({ model = 'Model Y', color = '#e9e9e9', options = {} }) {
   const d = MODEL_DIMENSIONS[model] || MODEL_DIMENSIONS['Model Y'];
-  const sport = String(options.wheels?.name || '').toLowerCase().includes('sport');
+  const cybertruck = model === 'Cybertruck';
+  const sport = String(options.wheels?.name || '').toLowerCase().includes('sport') || String(options.trim?.name || '').toLowerCase().includes('beast');
   const interior = String(options.interior?.name || '').toLowerCase();
   const glass = interior.includes('white') ? '#f1f1f1' : '#17191c';
 
   const body = useMemo(() => ({
     length: d.length,
     width: d.width,
-    bodyHeight: model === 'Model X' ? 0.68 : 0.60,
-    cabinLength: d.length * 0.48,
-    cabinWidth: d.width * 0.78,
+    bodyHeight: cybertruck ? 0.72 : model === 'Model X' ? 0.68 : 0.60,
+    cabinLength: cybertruck ? d.length * 0.40 : d.length * 0.48,
+    cabinWidth: cybertruck ? d.width * 0.82 : d.width * 0.78,
     cabinHeight: d.roof
-  }), [d, model]);
+  }), [d, model, cybertruck]);
 
   return (
-    <group rotation={[0, Math.PI / 2, 0]} scale={0.92}>
+    <group rotation={[0, Math.PI / 2, 0]} scale={cybertruck ? 0.78 : 0.92}>
       <mesh position={[0, 0.57, 0]} castShadow receiveShadow>
         <boxGeometry args={[body.length, body.bodyHeight, body.width]} />
-        <meshStandardMaterial color={color} metalness={0.72} roughness={0.2} />
+        <meshStandardMaterial color={color} metalness={cybertruck ? 0.9 : 0.72} roughness={cybertruck ? 0.14 : 0.2} />
       </mesh>
 
-      <mesh position={[0.18, 0.94, 0]} castShadow>
+      <mesh position={[cybertruck ? 0.34 : 0.18, 0.94, 0]} castShadow rotation={[0, cybertruck ? -0.08 : 0, 0]}>
         <boxGeometry args={[body.cabinLength, body.cabinHeight * 0.62, body.cabinWidth]} />
-        <meshStandardMaterial color={color} metalness={0.68} roughness={0.22} />
+        <meshStandardMaterial color={color} metalness={cybertruck ? 0.9 : 0.68} roughness={cybertruck ? 0.14 : 0.22} />
       </mesh>
 
-      <mesh position={[0.20, 1.00, 0]}>
+      <mesh position={[cybertruck ? 0.34 : 0.20, 1.00, 0]} rotation={[0, cybertruck ? -0.08 : 0, 0]}>
         <boxGeometry args={[body.cabinLength * 0.82, body.cabinHeight * 0.48, body.cabinWidth * 0.96]} />
         <meshPhysicalMaterial color={glass} roughness={0.08} metalness={0.12} transmission={0.08} transparent opacity={0.88} />
       </mesh>
+
+      {cybertruck && <mesh position={[-body.length * 0.30, 0.80, 0]} castShadow>
+        <boxGeometry args={[body.length * 0.28, 0.28, body.width * 0.94]} />
+        <meshStandardMaterial color={color} metalness={0.92} roughness={0.13} />
+      </mesh>}
 
       <mesh position={[-body.length * 0.44, 0.72, 0]}>
         <boxGeometry args={[0.06, 0.08, body.width * 0.68]} />
