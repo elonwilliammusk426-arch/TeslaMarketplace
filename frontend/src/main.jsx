@@ -2,152 +2,22 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
+import AdminInventoryDashboard from './AdminInventoryDashboard';
 import './styles.css';
 import './brand.css';
-
-const API = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-const MODELS = ['Model 3', 'Model Y', 'Model S', 'Model X'];
-const ASSETS = {
-  'Model 3': 'https://digitalassets.tesla.com/tesla-contents/image/upload/h_2560,w_4096,c_fit,f_auto,q_auto:best/Homepage-Model-3-Desktop-LHD',
-  'Model Y': 'https://digitalassets.tesla.com/tesla-contents/image/upload/h_2400,w_2880,c_fit,f_auto,q_auto:best/Homepage-Model-Y-Global-Desktop',
-  'Model S': 'https://digitalassets.tesla.com/tesla-contents/image/upload/f_auto,q_auto/Homepage-Model-S-Desktop-LHD-6.22.jpg',
-  'Model X': 'https://digitalassets.tesla.com/tesla-contents/image/upload/h_1800,w_2880,c_fit,f_auto,q_auto:best/Homepage-Model-X-Desktop-LHD'
-};
-
-async function api(path, options = {}) {
-  const response = await fetch(`${API}${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
-  return payload;
-}
-
-const money = (value) => `$${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-const tokenHeaders = () => {
-  const token = localStorage.getItem('tm_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
-function Car({ color }) {
-  return (
-    <group rotation={[0, Math.PI / 2, 0]}>
-      <mesh position={[0, 0.55, 0]} castShadow><boxGeometry args={[3.8, 0.55, 1.65]} /><meshStandardMaterial color={color} metalness={0.7} roughness={0.22} /></mesh>
-      <mesh position={[0.35, 1.02, 0]} castShadow><boxGeometry args={[2.1, 0.65, 1.35]} /><meshStandardMaterial color={color} metalness={0.7} roughness={0.22} /></mesh>
-      {[-1, 1].map((z) => [-1.25, 1.25].map((x) => (
-        <mesh key={`${z}-${x}`} position={[x, 0.32, z * 0.85]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.34, 0.34, 0.22, 32]} /><meshStandardMaterial color="#111" roughness={0.8} />
-        </mesh>
-      )))}
-    </group>
-  );
-}
-
-function Configurator({ vehicles, nav }) {
-  const [model, setModel] = useState('Model Y');
-  const [options, setOptions] = useState({});
-  const [data, setData] = useState(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    setError(''); setOptions({}); setData(null);
-    api(`/api/configurator/options?model=${encodeURIComponent(model)}`)
-      .then((result) => setData(result.data))
-      .catch((e) => setError(e.message));
-  }, [model]);
-
-  const vehicle = vehicles.find((v) => v.model === model && v.status === 'available');
-  const categories = data?.categories || {};
-  const selected = Object.values(options);
-  const base = Number(vehicle?.price || 0);
-  const total = base + selected.reduce((sum, option) => sum + Number(option.price || 0), 0);
-  const monthly = total > 250 ? ((total - 250) * (0.065 / 12)) / (1 - Math.pow(1 + 0.065 / 12, -72)) : 0;
-  const paint = String(options.paint?.name || '').toLowerCase();
-  const color = paint.includes('black') ? '#151515' : paint.includes('red') ? '#9e1518' : paint.includes('blue') ? '#193a65' : '#e9e9e9';
-
-  async function saveConfiguration() {
-    if (!localStorage.getItem('tm_token')) { nav('account'); return; }
-    if (!vehicle || !data) { setError('Vehicle configuration is not ready.'); return; }
-    setBusy(true); setError('');
-    try {
-      const result = await api('/api/configurations', {
-        method: 'POST', headers: tokenHeaders(),
-        body: JSON.stringify({ model, vehicleId: vehicle.id, optionIds: selected.map((option) => option.id) })
-      });
-      localStorage.setItem('tm_configuration', JSON.stringify(result.data));
-      nav('checkout');
-    } catch (e) { setError(e.message); } finally { setBusy(false); }
-  }
-
-  return (
-    <section className="configurator">
-      <div className="config-head"><div><span className="eyebrow">CONFIGURE</span><h1>Build your {model}.</h1><p>Every selected option is validated and priced by the PostgreSQL-backed API.</p></div><select value={model} onChange={(e) => setModel(e.target.value)}>{MODELS.map((m) => <option key={m}>{m}</option>)}</select></div>
-      <div className="config-grid">
-        <div className="config-visual"><Canvas shadows camera={{ position: [5, 2.8, 5], fov: 38 }}><ambientLight intensity={1.1} /><directionalLight position={[4, 5, 3]} intensity={3} castShadow /><Car color={color} /><OrbitControls enablePan={false} minDistance={4} maxDistance={8} /></Canvas><div className="canvas-label">Drag to rotate · Scroll to zoom</div></div>
-        <div className="config-panel"><div className="price-line"><span>Estimated total</span><strong>{money(total)}</strong></div>
-          {Object.entries(categories).map(([category, list]) => <div className="option-group" key={category}><h3>{category[0].toUpperCase() + category.slice(1)}</h3><div className="option-list">{list.map((option) => <button key={option.id} className={options[category]?.id === option.id ? 'option selected' : 'option'} onClick={() => setOptions((current) => ({ ...current, [category]: option }))}><span>{option.name}</span><b>{Number(option.price) ? `+${money(option.price)}` : 'Included'}</b></button>)}</div></div>)}
-          <div className="estimate"><div><span>Est. 72-month payment</span><strong>{money(monthly)}/mo</strong></div><small>Illustrative estimate at 6.5% APR; financing terms are not a credit offer.</small></div>
-          <button className="primary" disabled={busy || !data || !vehicle} onClick={saveConfiguration}>{busy ? 'Saving configuration…' : localStorage.getItem('tm_token') ? 'Continue to checkout →' : 'Sign in to continue →'}</button>
-          {error && <p className="error">{error}</p>}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Inventory({ vehicles, nav }) {
-  const [query, setQuery] = useState(''); const [model, setModel] = useState('all'); const [zip, setZip] = useState(''); const [max, setMax] = useState('');
-  const list = useMemo(() => vehicles.filter((v) => v.status === 'available' && (model === 'all' || v.model === model) && (!max || v.price <= Number(max)) && (!query || `${v.model} ${v.year} ${v.metadata?.trim || ''} ${v.metadata?.color || ''}`.toLowerCase().includes(query.toLowerCase())) && (!zip || v.metadata?.zip === zip)), [vehicles, query, model, zip, max]);
-  return <section className="section"><div className="heading"><span className="eyebrow">INVENTORY</span><h1>Find your Tesla.</h1><p>Live inventory is read from PostgreSQL.</p></div><div className="filters"><input placeholder="Model, trim or color" value={query} onChange={(e) => setQuery(e.target.value)} /><select value={model} onChange={(e) => setModel(e.target.value)}><option value="all">All models</option>{MODELS.map((m) => <option key={m}>{m}</option>)}</select><input placeholder="ZIP code" value={zip} onChange={(e) => setZip(e.target.value)} /><input type="number" placeholder="Max price" value={max} onChange={(e) => setMax(e.target.value)} /></div><div className="cards">{list.map((v) => <article className="card" key={v.id}><img src={ASSETS[v.model] || v.imageUrl} alt={v.model} /><div><small>{v.year} · {v.metadata?.trim || 'Available'}</small><h3>{v.model}</h3><p>{v.metadata?.color || 'Tesla'} · {v.range} mi range</p><strong>{money(v.price)}</strong><button onClick={() => nav('configure')}>Configure similar →</button></div></article>)}</div>{!list.length && <div className="empty">No vehicles match these filters.</div>}</section>;
-}
-
-function Checkout({ nav }) {
-  const config = JSON.parse(localStorage.getItem('tm_configuration') || 'null');
-  const [form, setForm] = useState({ name: '', email: '', phone: '', date: '', window: '', address: '', city: '', state: '', zip: '' }); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  useEffect(() => { if (!localStorage.getItem('tm_token')) nav('account'); }, [nav]);
-  if (!config) return <section className="section empty"><h2>No configuration found.</h2><button className="primary" onClick={() => nav('configure')}>Configure a vehicle</button></section>;
-  const change = (e) => setForm((current) => ({ ...current, [e.target.name]: e.target.value }));
-  async function submit(e) {
-    e.preventDefault(); setBusy(true); setError('');
-    try {
-      const order = await api('/api/orders', { method: 'POST', headers: tokenHeaders(), body: JSON.stringify({ configurationId: config.id, ...form, delivery: { date: form.date, window: form.window, address: form.address, city: form.city, state: form.state, zip: form.zip } }) });
-      const payment = await api('/api/payments/create-checkout-session', { method: 'POST', body: JSON.stringify({ orderId: order.data.id }) });
-      if (!payment.data?.url) throw new Error('Stripe checkout could not be created');
-      window.location.href = payment.data.url;
-    } catch (e2) { setError(e2.message); setBusy(false); }
-  }
-  return <section className="checkout section"><div><span className="eyebrow">CHECKOUT</span><h1>Reserve your {config.model}.</h1><p>Deposit due today: <strong>{money(config.depositAmount || 250)}</strong>. The deposit is non-refundable.</p></div><form onSubmit={submit}><div className="summary"><span>Vehicle</span><b>{config.model}</b><span>Configuration</span><b>{money(config.totalPrice)}</b><span>Deposit</span><b>{money(config.depositAmount || 250)}</b></div><div className="form-grid">{[['name','Full name'],['email','Email'],['phone','Phone'],['address','Delivery address'],['city','City'],['state','State'],['zip','ZIP code'],['date','Preferred delivery date']].map(([name, label]) => <label key={name}>{label}<input name={name} required={['name','email','address','city','state','zip','date'].includes(name)} type={name === 'date' ? 'date' : name === 'email' ? 'email' : 'text'} value={form[name]} onChange={change} /></label>)}</div><label>Delivery window<select name="window" required value={form.window} onChange={change}><option value="">Select a window</option><option>9:00 AM – 12:00 PM</option><option>12:00 PM – 3:00 PM</option><option>3:00 PM – 6:00 PM</option></select></label><button className="primary" disabled={busy}>{busy ? 'Opening secure Stripe checkout…' : `Pay ${money(config.depositAmount || 250)} deposit →`}</button>{error && <p className="error">{error}</p>}</form></section>;
-}
-
-function Auth({ nav }) {
-  const [mode, setMode] = useState('login'); const [form, setForm] = useState({ name: '', email: '', password: '' }); const [error, setError] = useState('');
-  async function submit(e) { e.preventDefault(); try { const result = await api(`/api/auth/${mode}`, { method: 'POST', body: JSON.stringify(form) }); localStorage.setItem('tm_token', result.data.token); nav('account'); } catch (e2) { setError(e2.message); } }
-  return <section className="auth section"><span className="eyebrow">ACCOUNT</span><h1>{mode === 'login' ? 'Sign in' : 'Create your account'}.</h1><form onSubmit={submit}>{mode === 'register' && <input placeholder="Full name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />}<input placeholder="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /><input placeholder="Password" type="password" minLength="8" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /><button className="primary">Continue</button>{error && <p className="error">{error}</p>}</form><button className="text" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Create an account' : 'Already have an account?'}</button></section>;
-}
-
-function Account({ nav }) {
-  const [user, setUser] = useState(null); const [orders, setOrders] = useState([]); const [selected, setSelected] = useState(null); const [error, setError] = useState('');
-  useEffect(() => { const token = localStorage.getItem('tm_token'); if (!token) return; api('/api/me', { headers: tokenHeaders() }).then((r) => { setUser(r.data); return api('/api/orders', { headers: tokenHeaders() }); }).then((r) => setOrders(r.data || [])).catch((e) => setError(e.message)); }, []);
-  if (!localStorage.getItem('tm_token')) return <Auth nav={nav} />;
-  if (!user) return <section className="section"><h1>Loading your account…</h1>{error && <p className="error">{error}</p>}</section>;
-  async function openOrder(id) { try { setSelected((await api(`/api/orders/${id}`, { headers: tokenHeaders() })).data); } catch (e) { setError(e.message); } }
-  return <section className="section"><span className="eyebrow">ACCOUNT</span><h1>Welcome back, {user.name}.</h1><div className="account-card"><p>{user.email}</p><h2>Your orders</h2>{orders.length ? orders.map((order) => <button className="order" key={order.id} onClick={() => openOrder(order.id)}><b>{order.trackingId}</b><span>{order.status}</span><strong>{money(order.total)}</strong></button>) : <p>No orders yet.</p>}{selected && <div className="tracking-card"><h3>{selected.trackingId}</h3><p>Status: <strong>{selected.status}</strong></p><p>Delivery: {selected.delivery?.deliveryDate || 'Not scheduled'} · {selected.delivery?.deliveryWindow || '—'}</p>{(selected.tracking || []).map((event) => <div className="event" key={`${event.createdAt}-${event.status}`}><b>{event.status}</b><span>{event.note}</span></div>)}</div>}</div><button className="secondary" onClick={() => { localStorage.removeItem('tm_token'); nav('home'); }}>Sign out</button>{error && <p className="error">{error}</p>}</section>;
-}
-
-function Track() {
-  const [id, setId] = useState(''); const [data, setData] = useState(null); const [error, setError] = useState('');
-  async function submit(e) { e.preventDefault(); try { setError(''); setData((await api(`/api/orders/track/${encodeURIComponent(id.trim())}`)).data); } catch (e2) { setData(null); setError(e2.message); } }
-  return <section className="section track"><span className="eyebrow">ORDER TRACKING</span><h1>Track your order.</h1><form onSubmit={submit}><input required placeholder="TMX-… tracking ID" value={id} onChange={(e) => setId(e.target.value)} /><button className="primary">Track</button></form>{error && <p className="error">{error}</p>}{data && <div className="tracking-card"><h2>{data.vehicle?.year} {data.vehicle?.model}</h2><p>{data.trackingId}</p><strong>{data.status}</strong><p>Delivery: {data.delivery?.deliveryDate || 'Not scheduled'} · {data.delivery?.deliveryWindow || '—'}</p>{(data.tracking || []).map((event) => <div className="event" key={`${event.createdAt}-${event.status}`}><b>{event.status}</b><span>{event.note}</span></div>)}</div>}</section>;
-}
-
-function Header({ page, nav }) { return <header><button className="logo" onClick={() => nav('home')}>TESLA<span>MARKETPLACE</span></button><nav>{[['home','Home'],['inventory','Inventory'],['configure','Configure'],['track','Track'],['account','Account']].map(([key,label]) => <button className={page === key ? 'active' : ''} key={key} onClick={() => nav(key)}>{label}</button>)}</nav></header>; }
-
-function App() {
-  const [page, setPage] = useState('home'); const [vehicles, setVehicles] = useState([]);
-  useEffect(() => { api('/api/vehicles').then((r) => setVehicles(r.data || [])).catch(() => {}); const params = new URLSearchParams(location.search); if (params.get('payment') === 'success') setPage('track'); }, []);
-  return <><Header page={page} nav={setPage} />{page === 'home' && <><section className="hero"><div><span className="eyebrow">TESLAMARKETPLACE</span><h1>Drive what<br /><i>moves you.</i></h1><p>Configure a Tesla, search inventory, schedule delivery, reserve with Stripe and track your order.</p><button className="primary" onClick={() => setPage('configure')}>Build your Tesla →</button></div><img src={ASSETS['Model Y']} alt="Tesla Model Y" /></section><section className="section"><span className="eyebrow">THE LINEUP</span><h2>Choose your starting point.</h2><div className="model-row">{MODELS.map((m) => <button key={m} onClick={() => setPage('configure')}><img src={ASSETS[m]} alt={m} /><b>{m}</b><span>Configure →</span></button>)}</div></section></>}{page === 'inventory' && <Inventory vehicles={vehicles} nav={setPage} />}{page === 'configure' && <Configurator vehicles={vehicles} nav={setPage} />}{page === 'checkout' && <Checkout nav={setPage} />}{page === 'account' && <Account nav={setPage} />}{page === 'track' && <Track />}<footer>© {new Date().getFullYear()} TeslaMarketplace · PostgreSQL · Stripe</footer></>;
-}
-
-createRoot(document.getElementById('root')).render(<App />);
+const API=(import.meta.env.VITE_API_URL||'').replace(/\/$/,'');
+const MODELS=['Model 3','Model Y','Model S','Model X'];
+const ASSETS={'Model 3':'https://digitalassets.tesla.com/tesla-contents/image/upload/h_2560,w_4096,c_fit,f_auto,q_auto:best/Homepage-Model-3-Desktop-LHD','Model Y':'https://digitalassets.tesla.com/tesla-contents/image/upload/h_2400,w_2880,c_fit,f_auto,q_auto:best/Homepage-Model-Y-Global-Desktop','Model S':'https://digitalassets.tesla.com/tesla-contents/image/upload/f_auto,q_auto/Homepage-Model-S-Desktop-LHD-6.22.jpg','Model X':'https://digitalassets.tesla.com/tesla-contents/image/upload/h_1800,w_2880,c_fit,f_auto,q_auto:best/Homepage-Model-X-Desktop-LHD'};
+async function api(path,options={}){const response=await fetch(`${API}${path}`,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Request failed (${response.status})`);return payload}
+const money=value=>`$${Number(value||0).toLocaleString(undefined,{maximumFractionDigits:0})}`;
+const tokenHeaders=()=>{const token=localStorage.getItem('tm_token');return token?{Authorization:`Bearer ${token}`}:{}};
+function Car({color}){return <group rotation={[0,Math.PI/2,0]}><mesh position={[0,.55,0]} castShadow><boxGeometry args={[3.8,.55,1.65]}/><meshStandardMaterial color={color} metalness={.7} roughness={.22}/></mesh><mesh position={[.35,1.02,0]} castShadow><boxGeometry args={[2.1,.65,1.35]}/><meshStandardMaterial color={color} metalness={.7} roughness={.22}/></mesh>{[-1,1].map(z=>[-1.25,1.25].map(x=><mesh key={`${z}-${x}`} position={[x,.32,z*.85]} rotation={[Math.PI/2,0,0]}><cylinderGeometry args={[.34,.34,.22,32]}/><meshStandardMaterial color="#111" roughness={.8}/></mesh>))}</group>}
+function Configurator({vehicles,nav}){const[model,setModel]=useState('Model Y');const[options,setOptions]=useState({});const[data,setData]=useState(null);const[error,setError]=useState('');const[busy,setBusy]=useState(false);useEffect(()=>{setError('');setOptions({});setData(null);api(`/api/configurator/options?model=${encodeURIComponent(model)}`).then(r=>setData(r.data)).catch(e=>setError(e.message))},[model]);const vehicle=vehicles.find(v=>v.model===model&&v.status==='available');const categories=data?.categories||{};const selected=Object.values(options);const base=Number(vehicle?.price||0);const total=base+selected.reduce((s,o)=>s+Number(o.price||0),0);const monthly=total>250?((total-250)*(.065/12))/(1-Math.pow(1+.065/12,-72)):0;const paint=String(options.paint?.name||'').toLowerCase();const color=paint.includes('black')?'#151515':paint.includes('red')?'#9e1518':paint.includes('blue')?'#193a65':'#e9e9e9';async function saveConfiguration(){if(!localStorage.getItem('tm_token')){nav('account');return}if(!vehicle||!data){setError('Vehicle configuration is not ready.');return}setBusy(true);setError('');try{const result=await api('/api/configurations',{method:'POST',headers:tokenHeaders(),body:JSON.stringify({model,vehicleId:vehicle.id,optionIds:selected.map(o=>o.id)})});localStorage.setItem('tm_configuration',JSON.stringify(result.data));nav('checkout')}catch(e){setError(e.message)}finally{setBusy(false)}}return <section className="configurator"><div className="config-head"><div><span className="eyebrow">CONFIGURE</span><h1>Build your {model}.</h1><p>Every selected option is validated and priced by the PostgreSQL-backed API.</p></div><select value={model} onChange={e=>setModel(e.target.value)}>{MODELS.map(m=><option key={m}>{m}</option>)}</select></div><div className="config-grid"><div className="config-visual"><Canvas shadows camera={{position:[5,2.8,5],fov:38}}><ambientLight intensity={1.1}/><directionalLight position={[4,5,3]} intensity={3} castShadow/><Car color={color}/><OrbitControls enablePan={false} minDistance={4} maxDistance={8}/></Canvas><div className="canvas-label">Drag to rotate · Scroll to zoom</div></div><div className="config-panel"><div className="price-line"><span>Estimated total</span><strong>{money(total)}</strong></div>{Object.entries(categories).map(([category,list])=><div className="option-group" key={category}><h3>{category[0].toUpperCase()+category.slice(1)}</h3><div className="option-list">{list.map(option=><button key={option.id} className={options[category]?.id===option.id?'option selected':'option'} onClick={()=>setOptions(current=>({...current,[category]:option}))}><span>{option.name}</span><b>{Number(option.price)?`+${money(option.price)}`:'Included'}</b></button>)}</div></div>)}<div className="estimate"><div><span>Est. 72-month payment</span><strong>{money(monthly)}/mo</strong></div><small>Illustrative estimate at 6.5% APR; financing terms are not a credit offer.</small></div><button className="primary" disabled={busy||!data||!vehicle} onClick={saveConfiguration}>{busy?'Saving configuration…':localStorage.getItem('tm_token')?'Continue to checkout →':'Sign in to continue →'}</button>{error&&<p className="error">{error}</p>}</div></div></section>}
+function Inventory({vehicles,nav}){const[query,setQuery]=useState('');const[model,setModel]=useState('all');const[zip,setZip]=useState('');const[max,setMax]=useState('');const list=useMemo(()=>vehicles.filter(v=>v.status==='available'&&(model==='all'||v.model===model)&&(!max||v.price<=Number(max))&&(!query||`${v.model} ${v.year} ${v.metadata?.trim||''} ${v.metadata?.color||''}`.toLowerCase().includes(query.toLowerCase()))&&(!zip||v.metadata?.zip===zip)),[vehicles,query,model,zip,max]);return <section className="section"><div className="heading"><span className="eyebrow">INVENTORY</span><h1>Find your Tesla.</h1><p>Live inventory is read from PostgreSQL.</p></div><div className="filters"><input placeholder="Model, trim or color" value={query} onChange={e=>setQuery(e.target.value)}/><select value={model} onChange={e=>setModel(e.target.value)}><option value="all">All models</option>{MODELS.map(m=><option key={m}>{m}</option>)}</select><input placeholder="ZIP code" value={zip} onChange={e=>setZip(e.target.value)}/><input type="number" placeholder="Max price" value={max} onChange={e=>setMax(e.target.value)}/></div><div className="cards">{list.map(v=><article className="card" key={v.id}><img src={ASSETS[v.model]||v.imageUrl} alt={v.model}/><div><small>{v.year} · {v.metadata?.trim||'Available'}</small><h3>{v.model}</h3><p>{v.metadata?.color||'Tesla'} · {v.range} mi range</p><strong>{money(v.price)}</strong><button onClick={()=>nav('configure')}>Configure similar →</button></div></article>)}</div>{!list.length&&<div className="empty">No vehicles match these filters.</div>}</section>}
+function Checkout({nav}){const config=JSON.parse(localStorage.getItem('tm_configuration')||'null');const[form,setForm]=useState({name:'',email:'',phone:'',date:'',window:'',address:'',city:'',state:'',zip:''});const[error,setError]=useState('');const[busy,setBusy]=useState(false);useEffect(()=>{if(!localStorage.getItem('tm_token'))nav('account')},[nav]);if(!config)return <section className="section empty"><h2>No configuration found.</h2><button className="primary" onClick={()=>nav('configure')}>Configure a vehicle</button></section>;const change=e=>setForm(current=>({...current,[e.target.name]:e.target.value}));async function submit(e){e.preventDefault();setBusy(true);setError('');try{const order=await api('/api/orders',{method:'POST',headers:tokenHeaders(),body:JSON.stringify({configurationId:config.id,...form,delivery:{date:form.date,window:form.window,address:form.address,city:form.city,state:form.state,zip:form.zip}})});const payment=await api('/api/payments/create-checkout-session',{method:'POST',headers:tokenHeaders(),body:JSON.stringify({orderId:order.data.id})});if(!payment.data?.url)throw new Error('Stripe checkout could not be created');window.location.href=payment.data.url}catch(e2){setError(e2.message);setBusy(false)}}return <section className="checkout section"><div><span className="eyebrow">CHECKOUT</span><h1>Reserve your {config.model}.</h1><p>Deposit due today: <strong>{money(config.depositAmount||250)}</strong>. The deposit is non-refundable.</p></div><form onSubmit={submit}><div className="summary"><span>Vehicle</span><b>{config.model}</b><span>Configuration</span><b>{money(config.totalPrice)}</b><span>Deposit</span><b>{money(config.depositAmount||250)}</b></div><div className="form-grid">{[['name','Full name'],['email','Email'],['phone','Phone'],['address','Delivery address'],['city','City'],['state','State'],['zip','ZIP code'],['date','Preferred delivery date']].map(([name,label])=><label key={name}>{label}<input name={name} required={['name','email','address','city','state','zip','date'].includes(name)} type={name==='date'?'date':name==='email'?'email':'text'} value={form[name]} onChange={change}/></label>)}</div><label>Delivery window<select name="window" required value={form.window} onChange={change}><option value="">Select a window</option><option>9:00 AM – 12:00 PM</option><option>12:00 PM – 3:00 PM</option><option>3:00 PM – 6:00 PM</option></select></label><button className="primary" disabled={busy}>{busy?'Opening secure Stripe checkout…':`Pay ${money(config.depositAmount||250)} deposit →`}</button>{error&&<p className="error">{error}</p>}</form></section>}
+function Auth({nav}){const[mode,setMode]=useState('login');const[form,setForm]=useState({name:'',email:'',password:''});const[error,setError]=useState('');async function submit(e){e.preventDefault();try{const result=await api(`/api/auth/${mode}`,{method:'POST',body:JSON.stringify(form)});localStorage.setItem('tm_token',result.data.token);localStorage.setItem('tm_role',result.data.user.role);nav(result.data.user.role==='admin'?'admin':'account')}catch(e2){setError(e2.message)}}return <section className="auth section"><span className="eyebrow">ACCOUNT</span><h1>{mode==='login'?'Sign in':'Create your account'}.</h1><form onSubmit={submit}>{mode==='register'&&<input placeholder="Full name" required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>}<input placeholder="Email" type="email" required value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><input placeholder="Password" type="password" minLength="8" required value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/><button className="primary">Continue</button>{error&&<p className="error">{error}</p>}</form><button className="text" onClick={()=>setMode(mode==='login'?'register':'login')}>{mode==='login'?'Create an account':'Already have an account?'}</button></section>}
+function Account({nav}){const[user,setUser]=useState(null);const[orders,setOrders]=useState([]);const[selected,setSelected]=useState(null);const[error,setError]=useState('');useEffect(()=>{const token=localStorage.getItem('tm_token');if(!token)return;api('/api/me',{headers:tokenHeaders()}).then(r=>{setUser(r.data);if(r.data.role==='admin')localStorage.setItem('tm_role','admin');return api('/api/orders',{headers:tokenHeaders()})}).then(r=>setOrders(r.data||[])).catch(e=>setError(e.message))},[]);if(!localStorage.getItem('tm_token'))return <Auth nav={nav}/>;if(!user)return <section className="section"><h1>Loading your account…</h1>{error&&<p className="error">{error}</p>}</section>;async function openOrder(id){try{setSelected((await api(`/api/orders/${id}`,{headers:tokenHeaders()})).data)}catch(e){setError(e.message)}}return <section className="section"><span className="eyebrow">ACCOUNT</span><h1>Welcome back, {user.name}.</h1>{user.role==='admin'&&<button className="primary" onClick={()=>nav('admin')}>Open fleet inventory admin →</button>}<div className="account-card"><p>{user.email}</p><h2>Your orders</h2>{orders.length?orders.map(order=><button className="order" key={order.id} onClick={()=>openOrder(order.id)}><b>{order.trackingId}</b><span>{order.status}</span><strong>{money(order.total)}</strong></button>):<p>No orders yet.</p>}{selected&&<div className="tracking-card"><h3>{selected.trackingId}</h3><p>Status: <strong>{selected.status}</strong></p><p>Delivery: {selected.delivery?.deliveryDate||'Not scheduled'} · {selected.delivery?.deliveryWindow||'—'}</p>{(selected.tracking||[]).map(event=><div className="event" key={`${event.createdAt}-${event.status}`}><b>{event.status}</b><span>{event.note}</span></div>)}</div>}</div><button className="secondary" onClick={()=>{localStorage.removeItem('tm_token');localStorage.removeItem('tm_role');nav('home')}}>Sign out</button>{error&&<p className="error">{error}</p>}</section>}
+function Track(){const[id,setId]=useState('');const[data,setData]=useState(null);const[error,setError]=useState('');async function submit(e){e.preventDefault();try{setError('');setData((await api(`/api/orders/track/${encodeURIComponent(id.trim())}`)).data)}catch(e2){setData(null);setError(e2.message)}}return <section className="section track"><span className="eyebrow">ORDER TRACKING</span><h1>Track your order.</h1><form onSubmit={submit}><input required placeholder="TMX-… tracking ID" value={id} onChange={e=>setId(e.target.value)}/><button className="primary">Track</button></form>{error&&<p className="error">{error}</p>}{data&&<div className="tracking-card"><h2>{data.vehicle?.year} {data.vehicle?.model}</h2><p>{data.trackingId}</p><strong>{data.status}</strong><p>Delivery: {data.delivery?.deliveryDate||'Not scheduled'} · {data.delivery?.deliveryWindow||'—'}</p>{(data.tracking||[]).map(event=><div className="event" key={`${event.createdAt}-${event.status}`}><b>{event.status}</b><span>{event.note}</span></div>)}</div>}</section>}
+function Header({page,nav}){const isAdmin=localStorage.getItem('tm_role')==='admin';return <header><button className="logo" onClick={()=>nav('home')}>TESLA<span>MARKETPLACE</span></button><nav>{[['home','Home'],['inventory','Inventory'],['configure','Configure'],['track','Track'],['account','Account'],...(isAdmin?[['admin','Admin']]:[])].map(([key,label])=><button className={page===key?'active':''} key={key} onClick={()=>nav(key)}>{label}</button>)}</nav></header>}
+function App(){const[page,setPage]=useState('home');const[vehicles,setVehicles]=useState([]);useEffect(()=>{api('/api/vehicles').then(r=>setVehicles(r.data||[])).catch(()=>{});const params=new URLSearchParams(location.search);if(params.get('payment')==='success')setPage('track')},[]);return <><Header page={page} nav={setPage}/>{page==='home'&&<><section className="hero"><div><span className="eyebrow">TESLAMARKETPLACE</span><h1>Drive what<br/><i>moves you.</i></h1><p>Configure a Tesla, search inventory, schedule delivery, reserve with Stripe and track your order.</p><button className="primary" onClick={()=>setPage('configure')}>Build your Tesla →</button></div><img src={ASSETS['Model Y']} alt="Tesla Model Y"/></section><section className="section"><span className="eyebrow">THE LINEUP</span><h2>Choose your starting point.</h2><div className="model-row">{MODELS.map(m=><button key={m} onClick={()=>setPage('configure')}><img src={ASSETS[m]} alt={m}/><b>{m}</b><span>Configure →</span></button>)}</div></section></>}{page==='inventory'&&<Inventory vehicles={vehicles} nav={setPage}/>} {page==='configure'&&<Configurator vehicles={vehicles} nav={setPage}/>} {page==='checkout'&&<Checkout nav={setPage}/>} {page==='account'&&<Account nav={setPage}/>} {page==='track'&&<Track/>} {page==='admin'&&<AdminInventoryDashboard nav={setPage}/>}<footer>© {new Date().getFullYear()} TeslaMarketplace · PostgreSQL · Stripe</footer></>}
+createRoot(document.getElementById('root')).render(<App/>);
