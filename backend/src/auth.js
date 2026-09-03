@@ -1,7 +1,10 @@
 const crypto = require('node:crypto');
+const { query } = require('./db');
+const { canReadInventory, canWriteInventory, canDeleteInventory } = require('./roles');
 
 const SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET;
 const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+let roleSchemaReady = false;
 
 function requireSecret() {
   if (!SECRET || SECRET.length < 32) {
@@ -14,10 +17,24 @@ function base64url(value) {
   return Buffer.from(value).toString('base64url');
 }
 
+async function ensureRoleSchema() {
+  if (roleSchemaReady) return;
+  await query(`
+    ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE users ADD CONSTRAINT users_role_check
+      CHECK (role IN ('customer', 'viewer', 'manager', 'admin'));
+  `);
+  roleSchemaReady = true;
+}
+
 function signToken(payload) {
   const secret = requireSecret();
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body = base64url(JSON.stringify({ ...payload, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS }));
+  const body = base64url(JSON.stringify({
+    ...payload,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS
+  }));
   const signature = crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url');
   return `${header}.${body}.${signature}`;
 }
@@ -28,7 +45,9 @@ function verifyToken(token) {
   if (parts.length !== 3) throw new Error('Invalid token');
   const [header, body, signature] = parts;
   const expected = crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url');
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new Error('Invalid token');
+  if (signature.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    throw new Error('Invalid token');
+  }
   const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
   if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) throw new Error('Token expired');
   return payload;
@@ -53,18 +72,38 @@ function bearerToken(req) {
   return value.replace(/^Bearer\s+/i, '').trim();
 }
 
+async function authenticateRequest(req) {
+  req.user = verifyToken(bearerToken(req));
+  await ensureRoleSchema();
+}
+
 function requireAuth(req, res, next) {
-  try {
-    req.user = verifyToken(bearerToken(req));
-    next();
-  } catch {
+  authenticateRequest(req).then(() => next()).catch(() => {
     res.status(401).json({ error: 'Authentication required' });
-  }
+  });
 }
 
 function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
-  next();
+  const role = req.user?.role;
+  const isInventoryRoute = req.path.startsWith('/api/admin/inventory');
+
+  if (role === 'admin') return next();
+
+  if (isInventoryRoute) {
+    if (req.method === 'GET' && canReadInventory(req.user)) return next();
+    if ((req.method === 'POST' || req.method === 'PATCH') && canWriteInventory(req.user)) return next();
+    if (req.method === 'DELETE' && canDeleteInventory(req.user)) return next();
+  }
+
+  return res.status(403).json({ error: 'Insufficient permissions for this action' });
 }
 
-module.exports = { hashPassword, verifyPassword, signToken, verifyToken, requireAuth, requireAdmin };
+module.exports = {
+  hashPassword,
+  verifyPassword,
+  signToken,
+  verifyToken,
+  requireAuth,
+  requireAdmin,
+  ensureRoleSchema
+};
