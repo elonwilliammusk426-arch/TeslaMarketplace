@@ -6,11 +6,11 @@
   "main": "server.js",
   "scripts": {
     "build": "npm --prefix frontend install && VITE_API_URL= npm --prefix frontend run build",
-    "prestart": "node scripts/harden-production.js",
     "start": "node server.js",
     "dev": "node --watch server.js",
     "db:init": "node scripts/init-db.js",
     "db:seed": "node scripts/seed-db.js",
+    "db:harden": "node scripts/harden-production.js",
     "test": "node --test"
   },
   "engines": {
